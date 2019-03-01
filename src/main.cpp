@@ -1,17 +1,20 @@
 #include <Arduino.h>
 #include <painlessMesh.h>
 #include <FastLED.h>
+#include <ArduinoJson.h>
 
-// some gpio pin that is connected to an LED...
-// on my rig, this is 5, change to the right number of your LED.
-#define   LED             2       // GPIO number of connected LED, ON ESP-12 IS GPIO2
-
+#define   LED             2 
 #define   BLINK_PERIOD    3000 // milliseconds until cycle repeat
 #define   BLINK_DURATION  100  // milliseconds LED is on for
-
 #define   MESH_SSID       "whateverYouLike"
 #define   MESH_PASSWORD   "somethingSneaky"
 #define   MESH_PORT       5555
+
+#define   NUM_LEDS 5
+#define   DATA_PIN 3
+
+CRGB leds[NUM_LEDS];
+CRGB NodeColor = CRGB::MediumPurple;
 
 // Prototypes
 void sendMessage(); 
@@ -20,39 +23,32 @@ void newConnectionCallback(uint32_t nodeId);
 void changedConnectionCallback(); 
 void nodeTimeAdjustedCallback(int32_t offset); 
 void delayReceivedCallback(uint32_t from, int32_t delay);
-
+void setLightsforStaff(uint32_t nodeid, uint8_t r, uint8_t g, uint8_t b);
 Scheduler     userScheduler; // to control your personal task
 painlessMesh  mesh;
-
 bool calc_delay = false;
 SimpleList<uint32_t> nodes;
-
 void sendMessage() ; // Prototype
 Task taskSendMessage( TASK_SECOND * 1, TASK_FOREVER, &sendMessage ); // start with a one second interval
-
 // Task to blink the number of nodes
+
 Task blinkNoNodes;
 bool onFlag = false;
 
 void setup() {
   Serial.begin(115200);
-
   pinMode(LED, OUTPUT);
-
-  //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
-  //mesh.setDebugMsgTypes(ERROR | DEBUG | CONNECTION | COMMUNICATION);  // set before init() so that you can see startup messages
-  mesh.setDebugMsgTypes(ERROR | DEBUG | CONNECTION);  // set before init() so that you can see startup messages
-
+  // mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
+  // mesh.setDebugMsgTypes(ERROR | DEBUG | CONNECTION | COMMUNICATION);  // set before init() so that you can see startup messages
+  // mesh.setDebugMsgTypes(ERROR | DEBUG | CONNECTION);  // set before init() so that you can see startup messages
   mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT);
   mesh.onReceive(&receivedCallback);
   mesh.onNewConnection(&newConnectionCallback);
   mesh.onChangedConnections(&changedConnectionCallback);
   mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
   mesh.onNodeDelayReceived(&delayReceivedCallback);
-
   userScheduler.addTask( taskSendMessage );
   taskSendMessage.enable();
-
   blinkNoNodes.set(BLINK_PERIOD, (mesh.getNodeList().size() + 1) * 2, []() {
       // If on, switch off, else switch on
       if (onFlag)
@@ -73,20 +69,33 @@ void setup() {
   });
   userScheduler.addTask(blinkNoNodes);
   blinkNoNodes.enable();
-
   randomSeed(analogRead(A0));
+  FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
+  leds[0] = CRGB::Black;
+  leds[1] = CRGB::Black;
+  leds[2] = CRGB::Black;
+  leds[3] = CRGB::Black;
+  leds[4] = CRGB::Black;
 }
 
 void loop() {
   userScheduler.execute(); // it will run mesh scheduler as well
   mesh.update();
   digitalWrite(LED, !onFlag);
+  
+  leds[0] = NodeColor;
+  FastLED.show();
 }
 
 void sendMessage() {
-  String msg = "Hello from node ";
-  msg += mesh.getNodeId();
-  msg += " myFreeMemory: " + String(ESP.getFreeHeap());
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& wmsg = jsonBuffer.createObject();
+  wmsg["nodeid"] = mesh.getNodeId();
+  wmsg["r"] = NodeColor[0];
+  wmsg["g"] = NodeColor[1];
+  wmsg["b"] = NodeColor[2];
+  String msg;
+  wmsg.printTo(msg);
   mesh.sendBroadcast(msg);
 
   if (calc_delay) {
@@ -105,7 +114,17 @@ void sendMessage() {
 
 
 void receivedCallback(uint32_t from, String & msg) {
+  DynamicJsonBuffer jsonBuffer;
   Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
+  if(msg[0] == '{'){
+    JsonObject& root = jsonBuffer.parseObject(msg);
+    uint32_t nid = root["nodeid"];
+    uint8_t r , g , b;
+    r = root["r"];
+    g = root["g"];
+    b = root["b"];
+    setLightsforStaff(nid, r , g , b);
+  }
 }
 
 void newConnectionCallback(uint32_t nodeId) {
@@ -136,6 +155,11 @@ void changedConnectionCallback() {
   }
   Serial.println();
   calc_delay = true;
+  leds[0] = CRGB::Black;
+  leds[1] = CRGB::Black;
+  leds[2] = CRGB::Black;
+  leds[3] = CRGB::Black;
+  leds[4] = CRGB::Black;
 }
 
 void nodeTimeAdjustedCallback(int32_t offset) {
@@ -144,4 +168,15 @@ void nodeTimeAdjustedCallback(int32_t offset) {
 
 void delayReceivedCallback(uint32_t from, int32_t delay) {
   Serial.printf("Delay to node %u is %d us\n", from, delay);
+}
+
+void setLightsforStaff(uint32_t nodeid, uint8_t r, uint8_t g, uint8_t b) { 
+  int idx = 0;
+  nodes = mesh.getNodeList();
+  SimpleList<uint32_t>::iterator node = nodes.begin();
+  while (node != nodes.end()) {
+    node++;
+    idx++;
+  }
+  leds[idx] = CRGB(r, g, b);
 }
