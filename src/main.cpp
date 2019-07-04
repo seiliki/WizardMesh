@@ -14,7 +14,7 @@
 #define   DATA_PIN 3
 
 CRGB leds[NUM_LEDS];
-CRGB NodeColor = CRGB::MediumPurple; // set your color here
+CRGB NodeColor = CRGB::Red; // set your color here
 
 /*
  * COLOR CODE DRAFT:
@@ -152,7 +152,7 @@ void sendMessage() {
   wmsg["g"] = NodeColor[1];
   wmsg["b"] = NodeColor[2];
   String msg;
-  serializeJson(wmsg, Serial);
+  serializeJson(wmsg, msg);
   // wmsg.printTo(msg);
   mesh.sendBroadcast(msg);
 
