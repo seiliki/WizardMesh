@@ -146,14 +146,14 @@ CRGB nextColor(){
 }
 
 void sendMessage() {
-  DynamicJsonBuffer jsonBuffer;
-  JsonObject& wmsg = jsonBuffer.createObject();
+  DynamicJsonDocument wmsg(1024);
   wmsg["nodeid"] = mesh.getNodeId();
   wmsg["r"] = NodeColor[0];
   wmsg["g"] = NodeColor[1];
   wmsg["b"] = NodeColor[2];
   String msg;
-  wmsg.printTo(msg);
+  serializeJson(wmsg, Serial);
+  // wmsg.printTo(msg);
   mesh.sendBroadcast(msg);
 
   if (calc_delay) {
@@ -172,10 +172,11 @@ void sendMessage() {
 
 
 void receivedCallback(uint32_t from, String & msg) {
-  DynamicJsonBuffer jsonBuffer;
+  DynamicJsonDocument root(1024);
   Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
   if(msg[0] == '{'){
-    JsonObject& root = jsonBuffer.parseObject(msg);
+    DeserializationError _ = deserializeJson(root, msg);
+    // JsonObject& root = jsonBuffer.parseObject(msg);
     uint32_t nid = root["nodeid"];
     uint8_t r , g , b;
     r = root["r"];
