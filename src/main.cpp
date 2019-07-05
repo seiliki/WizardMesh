@@ -12,6 +12,8 @@
 
 #define   NUM_LEDS 5
 #define   DATA_PIN 3
+#define   POLLING_RATE .1
+
 
 CRGB leds[NUM_LEDS];
 CRGB NodeColor = CRGB::Red; // set your color here
@@ -28,13 +30,24 @@ CRGB NodeColor = CRGB::Red; // set your color here
  */
 
 vector<CRGB> colorlist = {
+  CRGB::PaleVioletRed,
+  CRGB::Coral,
+  CRGB::Crimson,
   CRGB::Red,
+  CRGB::FireBrick,
+  CRGB::Orange,
   CRGB::Yellow,
+  CRGB::GreenYellow,
   CRGB::Green,
+  CRGB::ForestGreen,
+  CRGB::Turquoise,
+  CRGB::DeepSkyBlue,
   CRGB::Blue,
-  CRGB::WhiteSmoke,
+  CRGB::DarkSlateBlue,
   CRGB::BlueViolet,
-  CRGB::PaleVioletRed
+  CRGB::Purple,
+  CRGB::WhiteSmoke,
+  CRGB::DarkSlateGrey
 };
 
 
@@ -49,6 +62,7 @@ void setLightsforStaff(uint32_t nodeid, uint8_t r, uint8_t g, uint8_t b);
 CRGB potToColor(int pot);
 CRGB makeRandomColor();
 CRGB nextColor();
+void beep();
 
 //
 Scheduler     userScheduler; // to control your personal task
@@ -56,20 +70,25 @@ painlessMesh  mesh;
 bool calc_delay = false;
 SimpleList<uint32_t> nodes;
 void sendMessage() ; // Prototype
-Task taskSendMessage( TASK_SECOND * 1, TASK_FOREVER, &sendMessage ); // start with a one second interval
-// Task to blink the number of nodes
-
+Task taskSendMessage( TASK_SECOND * POLLING_RATE, TASK_FOREVER, &sendMessage ); // start with a one second interval
+Task taskBeep(0, TASK_FOREVER, &beep);
 Task blinkNoNodes;
 bool onFlag = false;
+bool do_beep = false;
 
 int colorIndex = 0;
 
 int l_sw;
 int sw;
 
+int last_beep_sw;
+int beep_sw;
+
 void setup() {
   Serial.begin(115200);
   pinMode(LED, OUTPUT);
+  pinMode(D6, OUTPUT);
+  pinMode(D5, INPUT);
   // mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
   // mesh.setDebugMsgTypes(ERROR | DEBUG | CONNECTION | COMMUNICATION);  // set before init() so that you can see startup messages
   // mesh.setDebugMsgTypes(ERROR | DEBUG | CONNECTION);  // set before init() so that you can see startup messages
@@ -123,8 +142,15 @@ void loop() {
   if(l_sw == 0 && sw == 1){
     NodeColor = nextColor();
   }
-  // sw = analogRead(D2);
-  // NodeColor = potToColor(sw);
+
+  last_beep_sw = beep_sw;
+  beep_sw = digitalRead(D5);
+  if(last_beep_sw == 0 && beep_sw == 1){
+    do_beep = true;
+    userScheduler.addTask( taskBeep );
+    taskBeep.enable();
+
+  }
 }
 
 CRGB makeRandomColor(){
@@ -151,9 +177,15 @@ void sendMessage() {
   wmsg["r"] = NodeColor[0];
   wmsg["g"] = NodeColor[1];
   wmsg["b"] = NodeColor[2];
+  if(do_beep){
+    wmsg["beep"] = true;
+    do_beep = false;
+  }
+  else{
+    wmsg["beep"] = false;
+  }
   String msg;
   serializeJson(wmsg, msg);
-  // wmsg.printTo(msg);
   mesh.sendBroadcast(msg);
 
   if (calc_delay) {
@@ -166,8 +198,8 @@ void sendMessage() {
   }
 
   Serial.printf("Sending message: %s\n", msg.c_str());
-  
-  taskSendMessage.setInterval( TASK_SECOND * 1);
+
+  taskSendMessage.setInterval( TASK_SECOND * POLLING_RATE);
 }
 
 
@@ -183,6 +215,10 @@ void receivedCallback(uint32_t from, String & msg) {
     g = root["g"];
     b = root["b"];
     setLightsforStaff(nid, r , g , b);
+    if (root["beep"]){
+      userScheduler.addTask( taskBeep );
+      taskBeep.enable();
+    }
   }
 }
 
@@ -241,4 +277,12 @@ void setLightsforStaff(uint32_t nodeid, uint8_t r, uint8_t g, uint8_t b) {
   if (idx <= NUM_LEDS){
     leds[idx] = CRGB(r, g, b);
   }
+}
+
+void beep(){
+  Serial.printf("BEEP");
+  digitalWrite(D6, HIGH);
+  delay(100);
+  digitalWrite(D6, LOW);
+  taskBeep.disable();
 }
