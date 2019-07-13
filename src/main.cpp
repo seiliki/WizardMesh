@@ -134,7 +134,7 @@ void loop() {
   mesh.update();
   digitalWrite(LED, !onFlag);
   
-  leds[0] = NodeColor;
+  leds[4] = NodeColor;
   FastLED.show();
 
   l_sw = sw;
@@ -275,7 +275,7 @@ void setLightsforStaff(uint32_t nodeid, uint8_t r, uint8_t g, uint8_t b) {
   }
 
   if (idx <= NUM_LEDS){
-    leds[idx] = CRGB(r, g, b);
+    leds[idx-1] = CRGB(r, g, b);
   }
 }
 
