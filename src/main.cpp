@@ -272,12 +272,15 @@ void setLightsforStaff(uint32_t nodeid, uint8_t r, uint8_t g, uint8_t b) {
   while (node != nodes.end()) {
     node++;
     idx++;
+    if( *node == nodeid){
+      break;
+    }
   }
 
   if (idx <= NUM_LEDS){
     leds[idx-1] = CRGB(r, g, b);
   }
-}
+} 
 
 void beep(){
   Serial.printf("BEEP");
